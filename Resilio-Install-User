@@ -1,0 +1,71 @@
+#!/bin/bash
+
+IP=$(hostname -I)
+
+#Ask for User and Group that you want to run Resilio and and add key and repository
+
+read -p "What do you wnat Files User Name to be?: " USER
+read -p "Files Group Name?: " GROUP
+echo "Installing Resilio Sync"
+echo "deb http://linux-packages.resilio.com/resilio-sync/deb resilio-sync non-free" | sudo tee /etc/apt/sources.list.d/resilio-sync.list
+wget -qO- https://linux-packages.resilio.com/resilio-sync/key.asc | sudo tee /etc/apt/trusted.gpg.d/resilio.asc
+sudo apt-get update
+sudo apt-get install resilio-sync
+
+
+#Make New Folder in /etc for Resilio to live in
+
+sudo mkdir /etc/resilio
+sudo chown $USER:$GROUP /etc/resilio
+
+
+#Make storage directory and sync.pid file in resilio folder, without these resilio will not start
+
+mkdir /etc/resilio/storage
+echo "2500" | tee /etc/resilio/sync.pid
+
+#makes the config.json file for resilio
+
+{ echo "{";
+echo '    "storage_path" : "/etc/resilio/storage/",';
+echo '    "pid_file" : "/etc/resilio/sync.pid",';
+echo ""
+echo '    "webui" :';
+#Change the Listed to Address to what ip you want to listen on
+echo "    {";
+echo '        "listen" : "0.0.0.0:8888"';
+echo "    }"
+echo "}"; } | tee /etc/resilio/config.json
+chmod -R 750 /etc/resilio
+
+#Make systemd overide to run as User instead of rslync user
+sudo mkdir -p /etc/systemd/system/resilio-sync.service.d
+{ echo "[Service]";
+echo "User=$USER";
+echo "Group=$GROUP";
+echo "PIDFile=/etc/resilio/sync.pid";
+echo "ExecStartPre=";
+echo "ExecStart=";
+echo "ExecStart=/usr/bin/rslsync --config /etc/resilio/config.json"; } | sudo tee /etc/systemd/system/resilio-sync.service.d/overide.conf
+
+#Reloads daemons and checks to make sure it is running as user and enables at startup
+sudo systemctl daemon-reload
+sudo systemctl restart resilio-sync.service
+sudo systemctl enable resilio-sync.service
+ps aux | grep rslsync
+#sudo systemctl status resilio-sync.service
+echo""
+echo""
+
+
+echo "Finished Installing "
+echo ""
+read -p "Installation Finished
+ Login to Resilio Sync at: 
+ 127.0.0.1:8.8.8.8 On This Machine
+ $IP:8888 from another Computer (May have to Open this Port in Firewall)
+ 
+ 
+ Press ENTER Key to Exit"
+
+
